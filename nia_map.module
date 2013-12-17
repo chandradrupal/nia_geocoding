@@ -1,0 +1,247 @@
+<?php
+// $Id: nia_map.module
+
+/**
+*	Implementation of hook_menu.
+**/
+function nia_map_menu(){
+
+	$items = array();
+	$items['nia_menu'] = array(
+	'title' => "Nia Address",
+	'page callback' => "nia_create_address",
+	'access callback' => true,
+	'type' => MENU_NORMAL_ITEM, 
+	'weight' => '10', 
+	);
+	
+	// Multiple Marker location with zoom and info window.
+	$items['multimarker_location'] = array(
+	'title' => "Get Multiple Locations",
+	'page callback' => "get_multimarker_location",	
+	'access callback' => true,
+	'file'=> 'get_multimarker_location.php',
+	'weight' => '11', 
+	);
+	
+	//Get lat & Long onclick
+	$items['get_latitude'] = array(
+	'title' => "Get onclick Lat & Long",
+	'page callback' => "get_lat_lang",	
+	'access callback' => true,
+	'file'=> 'get_lat_lang.php',
+	'weight' => '12', 
+	);
+	
+	$items['test'] = array(
+	'title' => "test title",
+	'page callback' => "test_funct",	
+	'access callback' => true,
+	'weight' => '13', 
+	);
+	return $items;	
+}
+
+function test_funct()
+{
+	 $query = "select * from nia_locations";
+	$result = db_query($query);	
+	
+	while ($row = db_fetch_array($result)) {		
+		$lat_long_id .= $row['area'].'<br/>'; 	
+	} 
+	//echo $row['area'].'<br/>';
+	//$i_frame = '<iframe width="425" height="350" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="https://maps.google.com/?ie=UTF8&amp;ll=40.388397,-99.030762&amp;spn=4.351045,7.064209&amp;t=m&amp;z=7&amp;output=embed"></iframe><br /><small><a href="https://maps.google.com/?ie=UTF8&amp;ll=40.388397,-99.030762&amp;spn=4.351045,7.064209&amp;t=m&amp;z=7&amp;source=embed" style="color:#0000FF;text-align:left">View Larger Map</a></small>';
+	return $lat_long_id;
+	
+}
+
+
+/**
+*	Page callback function for nia_create_address.
+**/
+function nia_create_address()
+{
+	$output = drupal_get_form('nia_add_form');
+	return $output;
+}
+
+/**
+ * form builder; add address form
+ */
+function nia_add_form($form_state){
+ 
+	drupal_set_title('Add New Address');
+	 
+	$form = array();
+	 
+	$form['name'] = array(
+	'#title' => 'Name',
+	'#type' => 'textfield',
+	'#size' => '30',
+	);
+	 
+	$form['city'] = array(
+	'#title' => 'City',
+	'#type' => 'textfield',
+	'#size' => '30',
+	);
+	
+	$form['address'] = array(
+	'#title' => 'Address',
+	'#type' => 'textfield',
+	'#size' => '30',
+	);
+	 
+	$form['country'] = array(
+	'#title' => 'Country',
+	'#type' => 'textfield',
+	'#size' => '30',
+	);
+	 
+	$form['submit'] = array(
+	'#type' => 'submit',
+	'#value' => 'Submit',
+	);
+	 
+	return $form;
+}
+
+/**
+* validate function for Nia add form
+* @param $form An associative array containing the structure of the form
+* @param $form_state A keyed array containing the current state of the form
+*/
+	function nia_add_form_validate($form,$form_state){		
+		$name = $form_state['values']['name'];
+		
+		if (trim($name) == '' || strlen(trim($name)) < 3 ){
+		form_set_error('name','Person Name is either empty or Less than 3 characters.');
+		}		
+		$city	 = $form_state['values']['city'];
+		if (trim($city) == ''){
+		form_set_error('name','City is empty.');
+		}
+	}
+
+/**
+* submit function for person add form
+* @param $form An associative array containing the structure of the form
+* @param $form_state A keyed array containing the current state of the form
+*/
+    function nia_add_form_submit($form,$form_state){
+	
+    $name = trim($form_state['values']['name']);
+    $city = trim($form_state['values']['city']);
+	$address1 = trim($form_state['values']['address']);
+    $country = trim($form_state['values']['country']);
+	 
+	$val = $city.','.$address.','.$country;
+	
+	if(isset($val))
+{
+	$myaddress = urlencode($val);
+
+	//here is the google api url
+	$url = "http://maps.googleapis.com/maps/api/geocode/json?address=$myaddress&sensor=false";
+
+	//get the content from the api using file_get_contents
+	$getmap = file_get_contents($url); 
+
+	//the result is in json format. To decode it use json_decode
+	$googlemap = json_decode($getmap);
+	
+	//get the latitute, longitude from the json result by doing a for loop
+	foreach($googlemap->results as $res){
+		 $address = $res->geometry;
+		 $latlng = $address->location;
+		 $formattedaddress = $res->formatted_address;
+		 $latitude = $latlng->lat;
+		 $longitude = $latlng->lng;		
+	}
+}
+	
+	/* $query = "select id from nia_locations where area LIKE '$city'";
+	$result = db_query($query);	
+	while ($row = db_fetch_array($result)) {		
+		$lat_long_id = $row['id']; 		
+	} */
+		
+    $result = db_query("INSERT INTO {nia_address} (`name`, city, address, country, latitude, longitude) VALUES ('$name', '$city', '$address1', '$country', '$latitude', '$longitude')");
+	
+		if ($result !== FALSE){
+			drupal_set_message('Address added successfully.');
+		}
+    }	
+	
+
+
+
+/**
+ * form submit; nia search form.
+**/ 
+ function nia_search_form_submit($form,$form_state){			
+    $city = trim($form_state['values']['name']);
+			
+	//$query = "SELECT nl.latitude, nl.longitude, na.name, na.city, na.address FROM nia_locations nl inner join nia_address na where na.lat_long_id = nl.id and na.name = '$name'";
+	
+	$query = "SELECT latitude, longitude from {nia_address} where city = '$city'";
+	
+	$result = db_query($query);	
+	while ($row = db_fetch_array($result)) {		
+		$latitude = $row['latitude']; 
+		$longitude = $row['longitude'];	
+		$name = $row['name'];	
+		$city = $row['city'];
+		$address = $row['address'];
+	}
+	if(isset($latitude))
+	{
+		drupal_goto("nia_search/".$latitude."/".$longitude."/".$name."/".$city."/".$address);
+		drupal_goto("nia_search_address/".$latitude."/".$longitude);
+	}
+	else 
+	{
+		drupal_set_message('Location currently not found.');
+		drupal_goto("nia_search");
+	}
+}
+
+/**
+* Implementation of hook_block
+*/
+	function nia_map_block($op='list' , $delta=0, $edit=array()) {
+	
+		switch ($op) {
+			case 'list':
+				$blocks[0]['info'] = t('Nia Map Block1');
+			return $blocks;
+			case 'view':				
+				$blocks['subject'] = t('Demo Display');
+				$blocks['content'] = include_once('');
+			return $blocks;
+		}
+	}
+
+/**
+* Implementation of display_nia_block_map
+*/	
+	function display_nia_block_map()
+	{
+		//return 'Content for Nia map display.';
+		
+		//$output = drupal_get_form('nia_add_form');
+		//return $output;
+		return TRUE;
+	}
+	
+
+/**
+* Implementation of display_nia_block_map
+*/	
+	function nia_map_form_alter(&$form, &$form_state, $form_id)
+	{
+		
+		//dsm($form_id);
+		//dsm($form);
+	}	

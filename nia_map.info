@@ -1,0 +1,7 @@
+; $Id$
+name = nia_map
+description = Custom gmap module for nianow
+core = 7.x
+package = "custom module"
+dependencies[] = menu
+php = 5.1
